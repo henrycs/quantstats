@@ -73,21 +73,6 @@ def html(returns, benchmark=None, rf=0., grayscale=False,
     # prepare timeseries
     returns = _utils._prepare_returns(returns)
 
-    if benchmark is not None:
-        benchmark_title = kwargs.get('benchmark_title', 'Benchmark')
-        if kwargs.get('benchmark_title') is None:
-            if isinstance(benchmark, str):
-                benchmark_title = benchmark
-            elif isinstance(benchmark, _pd.Series):
-                benchmark_title = benchmark.name
-            elif isinstance(benchmark, _pd.DataFrame):
-                benchmark_title = benchmark[benchmark.columns[0]].name
-
-        tpl = tpl.replace('{{benchmark_title}}', f"Benchmark is {benchmark_title.upper()} | ")
-        benchmark = _utils._prepare_benchmark(benchmark, returns.index, rf)
-        if match_dates is True:
-            returns, benchmark = _match_dates(returns, benchmark)
-
     date_range = returns.index.strftime('%e %b, %Y')
     tpl = tpl.replace('{{date_range}}', date_range[0] + ' - ' + date_range[-1])
     tpl = tpl.replace('{{title}}', title)
@@ -107,28 +92,6 @@ def html(returns, benchmark=None, rf=0., grayscale=False,
     tpl = tpl.replace('<tr><td></td><td></td></tr>',
                       '<tr><td colspan="2"><hr></td></tr>')
 
-    if benchmark is not None:
-        yoy = _stats.compare(
-            returns, benchmark, "A", compounded=compounded,
-            prepare_returns=False)
-        yoy.columns = ['Benchmark', 'Strategy', 'Multiplier', 'Won']
-        yoy.index.name = 'Year'
-        tpl = tpl.replace('{{eoy_title}}', '<h3>EOY Returns vs Benchmark</h3>')
-        tpl = tpl.replace('{{eoy_table}}', _html_table(yoy))
-    else:
-        # pct multiplier
-        yoy = _pd.DataFrame(
-            _utils.group_returns(returns, returns.index.year) * 100)
-        yoy.columns = ['Return']
-        yoy['Cumulative'] = _utils.group_returns(
-            returns, returns.index.year, True)
-        yoy['Return'] = yoy['Return'].round(2).astype(str) + '%'
-        yoy['Cumulative'] = (yoy['Cumulative'] *
-                             100).round(2).astype(str) + '%'
-        yoy.index.name = 'Year'
-        tpl = tpl.replace('{{eoy_title}}', '<h3>EOY Returns</h3>')
-        tpl = tpl.replace('{{eoy_table}}', _html_table(yoy))
-
     dd = _stats.to_drawdown_series(returns)
     dd_info = _stats.drawdown_details(dd).sort_values(
         by='max drawdown', ascending=True)[:10]
@@ -146,14 +109,6 @@ def html(returns, benchmark=None, rf=0., grayscale=False,
                    prepare_returns=False)
     tpl = tpl.replace('{{returns}}', _embed_figure(figfile, figfmt))
 
-    figfile = _utils._file_stream()
-    _plots.log_returns(returns, benchmark, grayscale=grayscale,
-                       figsize=(8, 4), subtitle=False,
-                       savefig={'fname': figfile, 'format': figfmt},
-                       show=False, ylabel=False, cumulative=compounded,
-                       prepare_returns=False)
-    tpl = tpl.replace('{{log_returns}}', _embed_figure(figfile, figfmt))
-
     if benchmark is not None:
         figfile = _utils._file_stream()
         _plots.returns(returns, benchmark, match_volatility=True,
@@ -164,62 +119,12 @@ def html(returns, benchmark=None, rf=0., grayscale=False,
         tpl = tpl.replace('{{vol_returns}}', _embed_figure(figfile, figfmt))
 
     figfile = _utils._file_stream()
-    _plots.yearly_returns(returns, benchmark, grayscale=grayscale,
-                          figsize=(8, 4), subtitle=False,
-                          savefig={'fname': figfile, 'format': figfmt},
-                          show=False, ylabel=False, compounded=compounded,
-                          prepare_returns=False)
-    tpl = tpl.replace('{{eoy_returns}}', _embed_figure(figfile, figfmt))
-
-    figfile = _utils._file_stream()
-    _plots.histogram(returns, grayscale=grayscale,
-                     figsize=(8, 4), subtitle=False,
-                     savefig={'fname': figfile, 'format': figfmt},
-                     show=False, ylabel=False, compounded=compounded,
-                     prepare_returns=False)
-    tpl = tpl.replace('{{monthly_dist}}', _embed_figure(figfile, figfmt))
-
-    figfile = _utils._file_stream()
     _plots.daily_returns(returns, grayscale=grayscale,
                          figsize=(8, 3), subtitle=False,
                          savefig={'fname': figfile, 'format': figfmt},
                          show=False, ylabel=False,
                          prepare_returns=False)
     tpl = tpl.replace('{{daily_returns}}', _embed_figure(figfile, figfmt))
-
-    if benchmark is not None:
-        figfile = _utils._file_stream()
-        _plots.rolling_beta(returns, benchmark, grayscale=grayscale,
-                            figsize=(8, 3), subtitle=False,
-                            window1=win_half_year, window2=win_year,
-                            savefig={'fname': figfile, 'format': figfmt},
-                            show=False, ylabel=False,
-                            prepare_returns=False)
-        tpl = tpl.replace('{{rolling_beta}}', _embed_figure(figfile, figfmt))
-
-    figfile = _utils._file_stream()
-    _plots.rolling_volatility(returns, benchmark, grayscale=grayscale,
-                              figsize=(8, 3), subtitle=False,
-                              savefig={'fname': figfile, 'format': figfmt},
-                              show=False, ylabel=False, period=win_half_year,
-                              periods_per_year=win_year)
-    tpl = tpl.replace('{{rolling_vol}}', _embed_figure(figfile, figfmt))
-
-    figfile = _utils._file_stream()
-    _plots.rolling_sharpe(returns, grayscale=grayscale,
-                          figsize=(8, 3), subtitle=False,
-                          savefig={'fname': figfile, 'format': figfmt},
-                          show=False, ylabel=False, period=win_half_year,
-                          periods_per_year=win_year)
-    tpl = tpl.replace('{{rolling_sharpe}}', _embed_figure(figfile, figfmt))
-
-    figfile = _utils._file_stream()
-    _plots.rolling_sortino(returns, grayscale=grayscale,
-                           figsize=(8, 3), subtitle=False,
-                           savefig={'fname': figfile, 'format': figfmt},
-                           show=False, ylabel=False, period=win_half_year,
-                           periods_per_year=win_year)
-    tpl = tpl.replace('{{rolling_sortino}}', _embed_figure(figfile, figfmt))
 
     figfile = _utils._file_stream()
     _plots.drawdowns_periods(returns, grayscale=grayscale,
